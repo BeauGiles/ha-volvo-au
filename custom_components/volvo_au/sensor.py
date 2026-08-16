@@ -42,11 +42,13 @@ def _path(snap: dict[str, Any], *keys: str) -> Any:
 
 
 def _pretty_enum(raw: Any, *prefixes: str) -> str | None:
-    """Strip a known backend enum prefix and lowercase — same display style
-    as the Polestar integration's ``enum_name()`` helper (which lowercases
-    IntEnum member names), just applied to this integration's raw backend
-    strings instead of a typed enum. HA's frontend then title-cases the
-    result for display (e.g. "idle" -> "Idle").
+    """Strip a known backend enum prefix and return a sentence-case label,
+    e.g. "CHARGING_STATUS_V2_IDLE" -> "Idle". HA does *not* auto-capitalize
+    sensor states for us (that only happens for device_class="enum" plus a
+    matching translation string, which this integration doesn't define —
+    same as the Polestar integration's own enum_name() helper, which also
+    just lowercases), so we do it here instead of leaving raw/lowercase
+    text on screen.
 
     ``prefixes`` are tried in order; the first one that matches is
     stripped (useful when a field has drifted between a V1/V2 naming,
@@ -59,8 +61,10 @@ def _pretty_enum(raw: Any, *prefixes: str) -> str | None:
         if s.startswith(prefix):
             s = s[len(prefix):]
             break
-    s = s.lower().replace("_", " ")
-    return s or None
+    s = s.replace("_", " ").strip().lower()
+    if not s:
+        return None
+    return s[0].upper() + s[1:]
 
 
 def _round1(v: Any) -> float | None:
