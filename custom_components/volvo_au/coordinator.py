@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -69,6 +70,24 @@ def _is_active(snap: dict[str, Any]) -> bool:
     return False
 
 
+_AUTH_FAILURE_STATUS_CODES = ("400", "401", "403")
+
+
+def _is_auth_failure(err: VolvoAuthError) -> bool:
+    """Best-effort split between a dead refresh token (prompt for reauth)
+    and a transient failure at Volvo's token endpoint (just retry later).
+
+    VolvoAuthError's message embeds the HTTP status from
+    VolvoClient._refresh()'s "refresh failed: {status} ..." format. A
+    400/401/403 there means the refresh token itself was rejected
+    (expired/revoked/invalid_grant) — that needs a fresh login. Anything
+    else (5xx, timeouts) is treated as transient so a blip on Volvo's side
+    doesn't send the user through a reauth prompt for no reason.
+    """
+    msg = str(err)
+    return any(f"refresh failed: {code}" in msg for code in _AUTH_FAILURE_STATUS_CODES)
+
+
 class VolvoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Polls the iOS gateway with adaptive cadence."""
 
@@ -118,6 +137,8 @@ class VolvoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             snap = await self.client.snapshot()
         except VolvoAuthError as e:
+            if _is_auth_failure(e):
+                raise ConfigEntryAuthFailed(str(e)) from e
             raise UpdateFailed(f"auth: {e}") from e
         except VolvoApiError as e:
             raise UpdateFailed(f"api: {e}") from e

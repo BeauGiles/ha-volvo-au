@@ -1042,6 +1042,18 @@ class VolvoClient:
         results = await asyncio.gather(
             *(fn() for fn in readers.values()), return_exceptions=True
         )
+        # A dead/revoked refresh token fails identically for every reader
+        # (each independently calls _ensure_access_token() -> _refresh()).
+        # Without this check that gets buried as 13 separate per-field
+        # "_error" strings and snapshot() returns normally — the
+        # coordinator never sees a failure, so it never distinguishes a
+        # real auth failure from a one-off flaky endpoint and never
+        # prompts for reauth. If literally every reader failed with
+        # VolvoAuthError, propagate one instead of swallowing it.
+        auth_errors = [r for r in results if isinstance(r, VolvoAuthError)]
+        if auth_errors and len(auth_errors) == len(results):
+            raise auth_errors[0]
+
         for name, res in zip(readers.keys(), results):
             if isinstance(res, Exception):
                 out[name] = {"_error": f"{type(res).__name__}: {res}"}
