@@ -48,6 +48,16 @@ def _pretty_usage_mode(raw: Any) -> str | None:
     return s or None
 
 
+def _pretty_charging_status(raw: Any) -> str | None:
+    """CHARGING_STATUS_V2_IDLE -> "idle" (same style as the Polestar
+    integration's ChargingStatus enum names: charging/idle/done/etc.)."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    s = raw.removeprefix("CHARGING_STATUS_V2_").removeprefix("CHARGING_STATUS_")
+    s = s.lower().replace("_", " ")
+    return s or None
+
+
 def _round1(v: Any) -> float | None:
     if isinstance(v, (int, float)):
         return round(float(v), 1)
@@ -98,8 +108,11 @@ SENSORS: tuple[VolvoSensorDescription, ...] = (
     VolvoSensorDescription(
         key="charging_status",
         name="Charging status",
-        value_fn=lambda s: _path(s, "battery", "battery", "chargingStatusV2")
-        or _path(s, "battery", "battery", "chargingStatus"),
+        icon="mdi:ev-station",
+        value_fn=lambda s: _pretty_charging_status(
+            _path(s, "battery", "battery", "chargingStatusV2")
+            or _path(s, "battery", "battery", "chargingStatus")
+        ),
     ),
     VolvoSensorDescription(
         key="charger_connection",
