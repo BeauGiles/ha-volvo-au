@@ -41,19 +41,24 @@ def _path(snap: dict[str, Any], *keys: str) -> Any:
     return cur
 
 
-def _pretty_usage_mode(raw: Any) -> str | None:
+def _pretty_enum(raw: Any, *prefixes: str) -> str | None:
+    """Strip a known backend enum prefix and lowercase — same display style
+    as the Polestar integration's ``enum_name()`` helper (which lowercases
+    IntEnum member names), just applied to this integration's raw backend
+    strings instead of a typed enum. HA's frontend then title-cases the
+    result for display (e.g. "idle" -> "Idle").
+
+    ``prefixes`` are tried in order; the first one that matches is
+    stripped (useful when a field has drifted between a V1/V2 naming,
+    e.g. ``CHARGING_STATUS_V2_IDLE`` vs ``CHARGING_STATUS_IDLE``).
+    """
     if not isinstance(raw, str) or not raw:
         return None
-    s = raw.removeprefix("USAGE_MODE_").lower().replace("_", " ")
-    return s or None
-
-
-def _pretty_charging_status(raw: Any) -> str | None:
-    """CHARGING_STATUS_V2_IDLE -> "idle" (same style as the Polestar
-    integration's ChargingStatus enum names: charging/idle/done/etc.)."""
-    if not isinstance(raw, str) or not raw:
-        return None
-    s = raw.removeprefix("CHARGING_STATUS_V2_").removeprefix("CHARGING_STATUS_")
+    s = raw
+    for prefix in prefixes:
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
     s = s.lower().replace("_", " ")
     return s or None
 
@@ -109,15 +114,21 @@ SENSORS: tuple[VolvoSensorDescription, ...] = (
         key="charging_status",
         name="Charging status",
         icon="mdi:ev-station",
-        value_fn=lambda s: _pretty_charging_status(
+        value_fn=lambda s: _pretty_enum(
             _path(s, "battery", "battery", "chargingStatusV2")
-            or _path(s, "battery", "battery", "chargingStatus")
+            or _path(s, "battery", "battery", "chargingStatus"),
+            "CHARGING_STATUS_V2_",
+            "CHARGING_STATUS_",
         ),
     ),
     VolvoSensorDescription(
         key="charger_connection",
         name="Charger connection",
-        value_fn=lambda s: _path(s, "battery", "battery", "chargerConnectionStatus"),
+        icon="mdi:power-plug",
+        value_fn=lambda s: _pretty_enum(
+            _path(s, "battery", "battery", "chargerConnectionStatus"),
+            "CHARGER_CONNECTION_STATUS_",
+        ),
     ),
     VolvoSensorDescription(
         key="charging_power",
@@ -205,8 +216,9 @@ SENSORS: tuple[VolvoSensorDescription, ...] = (
         key="usage_mode",
         name="Usage mode",
         icon="mdi:car-info",
-        value_fn=lambda s: _pretty_usage_mode(
-            _path(s, "availability", "availability", "usageMode")
+        value_fn=lambda s: _pretty_enum(
+            _path(s, "availability", "availability", "usageMode"),
+            "USAGE_MODE_",
         ),
     ),
     # Outside temperature reported by Volvo's weather service
