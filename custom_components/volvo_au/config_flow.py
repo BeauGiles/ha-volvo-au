@@ -30,7 +30,10 @@ from .const import (
     CLIENT_ID,
     CONF_APP_INSTALLATION_ID,
     CONF_DPOP_PRIVATE_KEY_PEM,
+    CONF_MODEL_NAME,
+    CONF_MODEL_YEAR,
     CONF_REFRESH_TOKEN,
+    CONF_REGISTRATION_PLATE,
     CONF_VIN,
     DEFAULT_APP_INSTALLATION_ID,
     DOMAIN,
@@ -211,6 +214,7 @@ class VolvoAuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         car = next((c for c in self._cars if c.get("vin") == vin), {})
         model = car.get("modelName") or "Volvo"
         year = car.get("modelYear")
+        plate = car.get("registrationPlate")
         title = f"{model} {year}" if year else f"{model} {vin}"
         return self.async_create_entry(
             title=title,
@@ -219,6 +223,9 @@ class VolvoAuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DPOP_PRIVATE_KEY_PEM: self._dpop_pem,
                 CONF_REFRESH_TOKEN: self._tokens["refresh_token"],
                 CONF_APP_INSTALLATION_ID: DEFAULT_APP_INSTALLATION_ID,
+                CONF_MODEL_NAME: model,
+                CONF_MODEL_YEAR: year,
+                CONF_REGISTRATION_PLATE: plate,
             },
         )
 

@@ -72,7 +72,15 @@ def _is_active(snap: dict[str, Any]) -> bool:
 class VolvoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Polls the iOS gateway with adaptive cadence."""
 
-    def __init__(self, hass: HomeAssistant, client: VolvoClient) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: VolvoClient,
+        *,
+        model_name: str | None = None,
+        model_year: int | str | None = None,
+        registration_plate: str | None = None,
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -80,6 +88,9 @@ class VolvoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=POLL_IDLE),
         )
         self.client = client
+        self.model_name = model_name
+        self.model_year = model_year
+        self.registration_plate = registration_plate
         self._last_command_at: float = 0.0
         self._post_trip_until: float = 0.0
         self._prev_in_use: bool | None = None
