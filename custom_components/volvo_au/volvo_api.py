@@ -590,6 +590,47 @@ class VolvoClient:
         body = self._grpc_frame(outer)
         return await self._grpc_post(path, body, timeout=timeout)
 
+    async def _chronos_set_target_soc_grpc(
+        self,
+        path: str,
+        level: int,
+        *,
+        setting_type: int = 3,  # ChargeTargetLevelSettingType.CUSTOM
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """Chronos "set" verb for SetTargetSoc: same Request envelope as
+        _chronos_set_int_grpc, but with two varint fields on the outer
+        message — batteryChargeTargetLevel (field 2) and settingType
+        (field 3, 1=DAILY/2=LONG_TRIP/3=CUSTOM).
+        """
+
+        def _varint(v: int) -> bytes:
+            out = bytearray()
+            while True:
+                b = v & 0x7F
+                v >>= 7
+                if v:
+                    out.append(b | 0x80)
+                else:
+                    out.append(b)
+                    return bytes(out)
+
+        request_id = str(uuid.uuid4()).lower()
+        meta = self._pb_len_delim(4, b"\x08" + _varint(600))
+        req = (
+            self._pb_len_delim(1, request_id.encode("ascii"))
+            + self._pb_len_delim(2, self.vin.encode("ascii"))
+            + self._pb_len_delim(3, b"mapp")
+            + meta
+        )
+        outer = (
+            self._pb_len_delim(1, req)
+            + b"\x10" + _varint(level)  # field 2, varint
+            + b"\x18" + _varint(setting_type)  # field 3, varint
+        )
+        body = self._grpc_frame(outer)
+        return await self._grpc_post(path, body, timeout=timeout)
+
     async def _grpc_post(
         self, path: str, body: bytes, *, timeout: float = 30.0
     ) -> dict[str, Any]:
@@ -908,6 +949,21 @@ class VolvoClient:
             raise ValueError(f"amps out of range: {amps}")
         return await self._chronos_set_int_grpc(
             "/chronos.services.v1.AmpLimitService/SetAmpLimit", amps
+        )
+
+    async def set_target_soc(self, level: int) -> dict[str, Any]:
+        """Set the charge target state-of-charge (1-100%).
+
+        Always writes with settingType=CUSTOM. The car only honours a manually
+        entered target level while the setting type is CUSTOM (DAILY/LONG_TRIP
+        targets come from the car's own schedule); see the field-2/field-3
+        layout documented in unofficial-polestar-api's target_soc.py
+        (kildahldev/unofficial-polestar-api).
+        """
+        if not 1 <= level <= 100:
+            raise ValueError(f"target SoC out of range: {level}")
+        return await self._chronos_set_target_soc_grpc(
+            "/chronos.services.v1.TargetSocService/SetTargetSoc", level
         )
 
     async def set_global_charge_timer(
